@@ -1,5 +1,6 @@
 import React from 'react';
-import {SafeAreaView, Button, Alert} from 'react-native';
+import {Text, StyleSheet, View, Button, Alert} from 'react-native';
+import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import {
   initialize,
   requestPermission,
@@ -42,12 +43,14 @@ const App = () => {
   };
 
   return (
-    <SafeAreaView style={{flex: 1, justifyContent: 'center', alignItems: 'center'}}>
-      <Button
-        title="건강 데이터 권한 요청하기"
-        onPress={requestHealthDataPermission}
-      />
-    </SafeAreaView>
+    <SafeAreaProvider>
+      <SafeAreaView style={{flex: 1, justifyContent: 'center', alignItems: 'center'}}>
+        <Button
+          title="건강 데이터 권한 요청하기"
+          onPress={requestHealthDataPermission}
+        />
+      </SafeAreaView>
+    /</SafeAreaProvider>
   );
 };
 
