@@ -18,25 +18,25 @@ type HealthReadPermission = {
 
 
 const App = () => {
-  const requestHealthDataPermission = async () => {
-    useEffect(() => {
-      const initHealthConnect = async () => {
-        try {
-          const isInitialized = await initialize(); // 앱 시작 시 초기화 시도
-          if (!isInitialized) {
-            // 초기화 실패 시 사용자에게 알리거나 로그를 남길 수 있습니다.
-            console.warn('Health Connect 초기화 실패 (useEffect)');
-            // Alert.alert('오류', 'Health Connect를 초기화할 수 없습니다. 앱을 재시작해주세요.');
-          } else {
-            console.log('Health Connect initialized (useEffect):', isInitialized);
-          }
-        } catch (initError) {
-          console.error('Health Connect 초기화 중 오류 (useEffect)', initError);
-          // Alert.alert('오류', 'Health Connect 초기화 중 오류가 발생했습니다.');
+  useEffect(() => {
+    const initHealthConnect = async () => {
+      try {
+        const isInitialized = await initialize(); // 앱 시작 시 초기화 시도
+        if (!isInitialized) {
+          // 초기화 실패 시 사용자에게 알리거나 로그를 남길 수 있습니다.
+          console.warn('Health Connect 초기화 실패 (useEffect)');
+          // Alert.alert('오류', 'Health Connect를 초기화할 수 없습니다. 앱을 재시작해주세요.');
+        } else {
+          console.log('Health Connect initialized (useEffect):', isInitialized);
         }
-      };
-      initHealthConnect(); // 위에서 정의한 비동기 함수를 호출합니다.
-    }, []); // 빈 배열 []은 이 useEffect가 컴포넌트 마운트 시 한 번만 실행되도록 합니다.
+      } catch (initError) {
+        console.error('Health Connect 초기화 중 오류 (useEffect)', initError);
+        // Alert.alert('오류', 'Health Connect 초기화 중 오류가 발생했습니다.');
+      }
+    };
+    initHealthConnect(); // 위에서 정의한 비동기 함수를 호출합니다.
+  }, []); // 빈 배열 []은 이 useEffect가 컴포넌트 마운트 시 한 번만 실행되도록 합니다.
+  const requestHealthDataPermission = async () => {
     const sdkStatus = await getSdkStatus();
     if (sdkStatus < 3) {
       Alert.alert('오류', '플레이 스토어에서 Health Connect 앱을 먼저 설치해주세요.');
