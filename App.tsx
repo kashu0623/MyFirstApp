@@ -19,6 +19,18 @@ type HealthReadPermission = {
 
 const App = () => {
   const requestHealthDataPermission = async () => {
+    try {
+      const isInitialized = await initialize(); // <-- 초기화 시도
+      if (!isInitialized) {
+        Alert.alert('오류', 'Health Connect 초기화 실패');
+        return; // 초기화 실패 시 중단
+      }
+      console.log('Health Connect initialized:', isInitialized); // 성공 로그 추가
+    } catch (initError) {
+       console.error('초기화 중 오류', initError);
+       Alert.alert('오류', 'Health Connect 초기화 중 오류 발생');
+       return; // 오류 발생 시 중단
+    }
     const sdkStatus = await getSdkStatus();
     if (sdkStatus < 3) {
       Alert.alert('오류', '플레이 스토어에서 Health Connect 앱을 먼저 설치해주세요.');
