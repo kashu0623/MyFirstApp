@@ -1,5 +1,5 @@
-import React, { useEffect,useState } from 'react';
-import {Text, StyleSheet, View, Button, Alert} from 'react-native';
+import React, { useEffect, useState, useRef } from 'react';
+import {Text, StyleSheet, View, Button, Alert, AppState, AppStateStatus} from 'react-native';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import {
   initialize,
@@ -22,7 +22,45 @@ const App = () => {
   const [isInitialized, setIsInitialized] = useState(false);
   const [isInitializing, setIsInitializing] = useState(true);
   const [initError, setInitError] = useState<string | null>(null);
+  const [isRequestingPermission, setIsRequestingPermission] = useState(false);
+  const appState = useRef(AppState.currentState);
+  const permissionRequestTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
   
+  // 앱 생명주기 이벤트 처리
+  useEffect(() => {
+    const handleAppStateChange = (nextAppState: AppStateStatus) => {
+      console.log('App state changed from', appState.current, 'to', nextAppState);
+      
+      // 앱이 포그라운드로 돌아올 때 권한 요청이 진행 중이었다면 처리
+      if (appState.current === 'background' && nextAppState === 'active' && isRequestingPermission) {
+        console.log('App returned from background during permission request');
+        
+        // 권한 요청 타임아웃 정리
+        if (permissionRequestTimeout.current) {
+          clearTimeout(permissionRequestTimeout.current);
+          permissionRequestTimeout.current = null;
+        }
+        
+        // 잠시 대기 후 권한 요청 상태 해제
+        setTimeout(() => {
+          setIsRequestingPermission(false);
+          console.log('Permission request state cleared');
+        }, 1000);
+      }
+      
+      appState.current = nextAppState;
+    };
+
+    const subscription = AppState.addEventListener('change', handleAppStateChange);
+    
+    return () => {
+      subscription?.remove();
+      if (permissionRequestTimeout.current) {
+        clearTimeout(permissionRequestTimeout.current);
+      }
+    };
+  }, [isRequestingPermission]);
+
   useEffect(() => {
     const initHealthConnect = async () => {
       console.log('useEffect: Attempting to initialize Health Connect...');
@@ -47,7 +85,7 @@ const App = () => {
         setIsInitialized(true);
         
         // 초기화 완료 후 잠시 대기하여 네이티브 객체가 완전히 준비되도록 함
-        await new Promise<void>(resolve => setTimeout(resolve, 500));
+        await new Promise<void>(resolve => setTimeout(resolve, 1000)); // 대기 시간 증가
         
       } catch (error) {
         const errorMessage = error instanceof Error ? error.message : 'Unknown initialization error';
@@ -64,17 +102,26 @@ const App = () => {
   }, []);
   
   const requestHealthDataPermission = async () => {
-    console.log(`Button pressed: isInitialized=${isInitialized}, isInitializing=${isInitializing}`);
+    console.log(`Button pressed: isInitialized=${isInitialized}, isInitializing=${isInitializing}, isRequestingPermission=${isRequestingPermission}`);
 
-    // 초기화 안됐거나 진행중이면 혹시 모르니 한번 더 방지
-    if (!isInitialized || isInitializing) {
-        console.warn('Permission request blocked because initialization is not complete.');
-        Alert.alert('알림', 'Health Connect 초기화가 완료되지 않았습니다. 잠시 후 다시 시도해주세요.');
+    // 초기화 안됐거나 진행중이거나 이미 권한 요청 중이면 방지
+    if (!isInitialized || isInitializing || isRequestingPermission) {
+        console.warn('Permission request blocked because initialization is not complete or already requesting.');
+        Alert.alert('알림', 'Health Connect 초기화가 완료되지 않았거나 이미 권한 요청 중입니다. 잠시 후 다시 시도해주세요.');
         return;
     }
 
+    setIsRequestingPermission(true);
+    
+    // 권한 요청 타임아웃 설정 (30초)
+    permissionRequestTimeout.current = setTimeout(() => {
+      console.log('Permission request timeout');
+      setIsRequestingPermission(false);
+      Alert.alert('시간 초과', '권한 요청 시간이 초과되었습니다. 다시 시도해주세요.');
+    }, 30000);
+
     try {
-      // 권한 요청 전에 다시 한번 SDK 상태 확인
+      // SDK 상태 확인
       const sdkStatus = await getSdkStatus();
       console.log('SDK Status before permission request:', sdkStatus);
       
@@ -83,12 +130,34 @@ const App = () => {
         return;
       }
 
-      // 권한 요청 전에 다시 한번 초기화 상태 확인
-      const recheckInitialized = await initialize();
-      if (!recheckInitialized) {
-        Alert.alert('오류', 'Health Connect 재초기화에 실패했습니다. 앱을 재시작해주세요.');
-        return;
+      // 라이브러리 내부 문제를 우회하기 위한 다중 초기화 시도
+      let initSuccess = false;
+      for (let attempt = 1; attempt <= 3; attempt++) {
+        console.log(`Initialization attempt ${attempt}/3`);
+        
+        try {
+          const initialized = await initialize();
+          if (initialized) {
+            console.log(`Initialization successful on attempt ${attempt}`);
+            initSuccess = true;
+            break;
+          }
+        } catch (initError) {
+          console.warn(`Initialization attempt ${attempt} failed:`, initError);
+        }
+        
+        // 각 시도 사이에 대기
+        if (attempt < 3) {
+          await new Promise<void>(resolve => setTimeout(resolve, 1000));
+        }
       }
+
+      if (!initSuccess) {
+        throw new Error('Failed to initialize Health Connect after 3 attempts');
+      }
+
+      // 추가 대기 시간으로 네이티브 객체 안정화
+      await new Promise<void>(resolve => setTimeout(resolve, 2000));
 
       // 수정된 타입을 사용합니다.
       const permissions: HealthReadPermission[] = [
@@ -98,12 +167,45 @@ const App = () => {
       ];
       console.log('Requesting permissions:', permissions);
 
-      // requestPermission 함수에 permissions 배열을 전달할 때 'as any'를 추가합니다.
-      const granted = await requestPermission(permissions as any);
-      console.log('Permissions granted:', granted);
+      // 라이브러리 내부 문제를 우회하기 위한 권한 요청 시도
+      let granted: any = null;
+      let permissionSuccess = false;
+      
+      for (let attempt = 1; attempt <= 2; attempt++) {
+        console.log(`Permission request attempt ${attempt}/2`);
+        
+        try {
+          // requestPermission 함수에 permissions 배열을 전달할 때 'as any'를 추가합니다.
+          granted = await requestPermission(permissions as any);
+          console.log('Permissions granted:', granted);
+          permissionSuccess = true;
+          break;
+        } catch (permissionError) {
+          console.warn(`Permission request attempt ${attempt} failed:`, permissionError);
+          
+          if (attempt < 2) {
+            // 재시도 전에 다시 초기화
+            console.log('Re-initializing before retry...');
+            await initialize();
+            await new Promise<void>(resolve => setTimeout(resolve, 1000));
+          }
+        }
+      }
+
+      if (!permissionSuccess) {
+        throw new Error('Failed to request permissions after 2 attempts');
+      }
+      
+      // 타임아웃 정리
+      if (permissionRequestTimeout.current) {
+        clearTimeout(permissionRequestTimeout.current);
+        permissionRequestTimeout.current = null;
+      }
+      
+      setIsRequestingPermission(false);
       
       // 기존 Alert.alert('성공', ...) 줄을 아래 코드로 대체합니다.
-      const sleepGranted = granted.some(p => p.recordType === 'SleepSession' && p.accessType === 'read');
+      const sleepGranted = granted.some((p: any) => p.recordType === 'SleepSession' && p.accessType === 'read');
 
       if (sleepGranted) {
         Alert.alert('성공', '수면 데이터 읽기 권한이 허용되었습니다!');
@@ -114,6 +216,15 @@ const App = () => {
       }
     } catch (error) {
       console.error('Permission request failed:', error);
+      
+      // 타임아웃 정리
+      if (permissionRequestTimeout.current) {
+        clearTimeout(permissionRequestTimeout.current);
+        permissionRequestTimeout.current = null;
+      }
+      
+      setIsRequestingPermission(false);
+      
       if (error instanceof Error) {
         console.error('Error name:', error.name);
         console.error('Error message:', error.message);
@@ -121,7 +232,14 @@ const App = () => {
         
         // 특정 에러 타입에 따른 사용자 친화적 메시지
         if (error.message.includes('UninitializedPropertyAccessException')) {
-          Alert.alert('오류', 'Health Connect가 완전히 초기화되지 않았습니다. 앱을 재시작해주세요.');
+          Alert.alert(
+            '라이브러리 오류', 
+            'react-native-health-connect 라이브러리에 알려진 문제가 있습니다.\n\n' +
+            '해결 방법:\n' +
+            '1. Health Connect 앱을 최신 버전으로 업데이트\n' +
+            '2. 앱을 완전히 재시작\n' +
+            '3. 다른 Health Connect 라이브러리 사용 고려'
+          );
         } else if (error.message.includes('permission')) {
           Alert.alert('오류', '권한 요청 중 문제가 발생했습니다. Health Connect 앱을 확인해주세요.');
         } else {
@@ -137,9 +255,15 @@ const App = () => {
     <SafeAreaProvider>
       <SafeAreaView style={{flex: 1, justifyContent: 'center', alignItems: 'center', padding: 20}}>
         <Button
-          title={isInitializing ? "초기화 중..." : "건강 데이터 권한 요청하기"}
-          // 4. isInitialized가 true이고, isInitializing이 false일 때만 버튼 활성화
-          disabled={!isInitialized || isInitializing}
+          title={
+            isInitializing 
+              ? "초기화 중..." 
+              : isRequestingPermission 
+                ? "권한 요청 중..." 
+                : "건강 데이터 권한 요청하기"
+          }
+          // 4. isInitialized가 true이고, isInitializing이 false이고, 권한 요청 중이 아닐 때만 버튼 활성화
+          disabled={!isInitialized || isInitializing || isRequestingPermission}
           onPress={requestHealthDataPermission}
         />
         
@@ -147,6 +271,13 @@ const App = () => {
         {isInitializing && (
           <Text style={{marginTop: 10, color: 'blue'}}>
             Health Connect 초기화 중...
+          </Text>
+        )}
+        
+        {/* 권한 요청 상태 표시 */}
+        {isRequestingPermission && (
+          <Text style={{marginTop: 10, color: 'orange'}}>
+            권한 요청 중... Health Connect 화면에서 허용/거부를 선택해주세요.
           </Text>
         )}
         
