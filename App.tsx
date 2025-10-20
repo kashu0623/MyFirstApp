@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import React, { useEffect,useState } from 'react';
 import {Text, StyleSheet, View, Button, Alert} from 'react-native';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import {
@@ -18,26 +18,43 @@ type HealthReadPermission = {
 
 
 const App = () => {
-  useEffect(() => {
-    const initHealthConnect = async () => {
-      try {
-        const isInitialized = await initialize(); // 앱 시작 시 초기화 시도
-        if (!isInitialized) {
-          // 초기화 실패 시 사용자에게 알리거나 로그를 남길 수 있습니다.
-          console.warn('Health Connect 초기화 실패 (useEffect)');
-          // Alert.alert('오류', 'Health Connect를 초기화할 수 없습니다. 앱을 재시작해주세요.');
-        } else {
-          console.log('Health Connect initialized (useEffect):', isInitialized);
+  // 2. 초기화 상태와 버튼 활성화 상태를 관리할 state 추가
+  const [isInitialized, setIsInitialized] = useState(false);
+  const [isInitializing, setIsInitializing] = useState(true);
+    useEffect(() => {
+      const initHealthConnect = async () => {
+        console.log('useEffect: Attempting to initialize Health Connect...');
+        setIsInitializing(true);
+        try {
+          const initialized = await initialize();
+          if (!initialized) {
+            console.error('Health Connect initialization failed (useEffect)');
+            setIsInitialized(false);
+          } else {
+            console.log('Health Connect initialized successfully (useEffect)');
+            setIsInitialized(true);
+          }
+        } catch (initError) {
+          console.error('Health Connect initialization error (useEffect)', initError);
+          setIsInitialized(false);
+        } finally {
+          console.log('useEffect: Setting isInitializing to false.'); // <-- 로그 추가
+          setIsInitializing(false); // 초기화 완료 (성공/실패 무관)
         }
-      } catch (initError) {
-        console.error('Health Connect 초기화 중 오류 (useEffect)', initError);
-        // Alert.alert('오류', 'Health Connect 초기화 중 오류가 발생했습니다.');
-      }
-    };
-    initHealthConnect(); // 위에서 정의한 비동기 함수를 호출합니다.
-  }, []); // 빈 배열 []은 이 useEffect가 컴포넌트 마운트 시 한 번만 실행되도록 합니다.
+      };
+      initHealthConnect();
+    }, []);
+  
   const requestHealthDataPermission = async () => {
+    console.log(`Button pressed: isInitialized=${isInitialized}, isInitializing=${isInitializing}`); // <-- 로그 추가
+
+    // 초기화 안됐거나 진행중이면 혹시 모르니 한번 더 방지
+    if (!isInitialized || isInitializing) {
+        console.warn('Permission request blocked because initialization is not complete.');
+        return;
+    }
     const sdkStatus = await getSdkStatus();
+    console.log('SDK Status:', sdkStatus); // 로그 추가
     if (sdkStatus < 3) {
       Alert.alert('오류', '플레이 스토어에서 Health Connect 앱을 먼저 설치해주세요.');
       return;
@@ -49,11 +66,12 @@ const App = () => {
       {accessType: 'read', recordType: 'HeartRateVariabilityRmssd'},
       {accessType: 'read', recordType: 'SleepSession'},
     ];
+    console.log('Requesting permissions:', permissions); // 로그 추가
 
     try {
       // requestPermission 함수에 permissions 배열을 전달할 때 'as any'를 추가합니다.
       const granted = await requestPermission(permissions as any); // <--- 수정된 부분
-      console.log('권한 허용됨:', granted);
+      console.log('Permissions granted:', granted);
       // 기존 Alert.alert('성공', ...) 줄을 아래 코드로 대체합니다.
       const sleepGranted = granted.some(p => p.recordType === 'SleepSession' && p.accessType === 'read');
 
@@ -65,7 +83,12 @@ const App = () => {
         Alert.alert('알림', '수면 데이터 읽기 권한이 필요합니다.');
       }
     } catch (error) {
-      console.error('권한 요청 실패', error);
+      console.error('Permission request failed:', error);
+      if (error instanceof Error) {
+        console.error('Error name:', error.name);
+        console.error('Error message:', error.message);
+        console.error('Error stack:', error.stack);
+      }
       Alert.alert('오류', '권한을 요청하는 데 실패했습니다.');
     }
   };
@@ -74,9 +97,15 @@ const App = () => {
     <SafeAreaProvider>
       <SafeAreaView style={{flex: 1, justifyContent: 'center', alignItems: 'center'}}>
         <Button
-          title="건강 데이터 권한 요청하기"
+          title={isInitializing ? "초기화 중..." : "건강 데이터 권한 요청하기"}
+          // 4. isInitialized가 true이고, isInitializing이 false일 때만 버튼 활성화
+          disabled={!isInitialized || isInitializing}
           onPress={requestHealthDataPermission}
         />
+        {!isInitialized && !isInitializing && (
+           // 5. 초기화 실패 시 사용자 안내 추가 (선택 사항)
+           <Text style={{marginTop: 10, color: 'red'}}>Health Connect 초기화 실패. 앱 재시작 또는 Health Connect 앱 확인이 필요합니다.</Text>
+        )}
       </SafeAreaView>
     </SafeAreaProvider>
   );
