@@ -29,13 +29,23 @@ const App = () => {
     const permissions: HealthReadPermission[] = [ // <--- 수정된 타입을 여기에 적용
       {accessType: 'read', recordType: 'HeartRate'},
       {accessType: 'read', recordType: 'HeartRateVariabilityRmssd'},
+      {accessType: 'read', recordType: 'SleepSession'},
     ];
 
     try {
       // requestPermission 함수에 permissions 배열을 전달할 때 'as any'를 추가합니다.
       const granted = await requestPermission(permissions as any); // <--- 수정된 부분
       console.log('권한 허용됨:', granted);
-      Alert.alert('성공', '권한이 성공적으로 허용되었습니다!');
+      // 기존 Alert.alert('성공', ...) 줄을 아래 코드로 대체합니다.
+      const sleepGranted = granted.some(p => p.recordType === 'SleepSession' && p.accessType === 'read');
+
+      if (sleepGranted) {
+        Alert.alert('성공', '수면 데이터 읽기 권한이 허용되었습니다!');
+        // 여기에 실제 데이터를 읽어오는 함수 호출 로직을 추가할 수 있습니다.
+        // 예: readSleepData();
+      } else {
+        Alert.alert('알림', '수면 데이터 읽기 권한이 필요합니다.');
+      }
     } catch (error) {
       console.error('권한 요청 실패', error);
       Alert.alert('오류', '권한을 요청하는 데 실패했습니다.');
@@ -50,7 +60,7 @@ const App = () => {
           onPress={requestHealthDataPermission}
         />
       </SafeAreaView>
-    /</SafeAreaProvider>
+    </SafeAreaProvider>
   );
 };
 
