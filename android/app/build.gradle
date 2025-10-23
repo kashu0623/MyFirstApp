@@ -95,7 +95,7 @@ android {
 
     namespace "com.temprn71"
     defaultConfig {
-        applicationId "com.temprn71"
+        applicationId "com.myfirstapp"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
         versionCode 1
