@@ -1,4 +1,7 @@
-apply plugin: "com.android.application"
+plugins { // <-- 이 블록 추가 또는 수정
+    id "com.android.application"
+    id "com.facebook.react" // <-- 이 줄 추가
+}
 
 import com.android.build.OutputFile
 
@@ -99,6 +102,7 @@ android {
         targetSdkVersion rootProject.ext.targetSdkVersion
         versionCode 1
         versionName "1.0"
+        multiDexEnabled true
     }
 
     splits {
@@ -152,7 +156,7 @@ dependencies {
     implementation("com.facebook.react:react-android")
 
     implementation("androidx.swiperefreshlayout:swiperefreshlayout:1.0.0")
-
+    implementation "androidx.multidex:multidex:2.0.1"
     //debugImplementation("com.facebook.flipper:flipper:${FLIPPER_VERSION}")
     //debugImplementation("com.facebook.flipper:flipper-network-plugin:${FLIPPER_VERSION}") {
     //    exclude group:'com.squareup.okhttp3', module:'okhttp'
@@ -167,3 +171,13 @@ dependencies {
 }
 
 apply from: file("../../node_modules/@react-native-community/cli-platform-android/native_modules.gradle"); applyNativeModulesAppBuildGradle(project)
+configurations.all {
+    resolutionStrategy {
+        force "androidx.core:core:1.9.0"
+        force "androidx.core:core-ktx:1.9.0"
+        force "androidx.health.connect:connect-client:1.0.0-alpha11"// health-connect는 API 34+ 부터 지원되므로 이전 버전이 없을 수 있습니다.
+        // 일단 core 라이브러리만 강제하고 시도해 봅니다.
+        // 만약 health-connect 관련 오류가 계속되면, 다른 방법을 찾아야 합니다.
+        // force "androidx.health.connect:connect-client:1.0.0-alphaXX" // <-- 호환되는 버전이 있다면 추가
+    }
+}

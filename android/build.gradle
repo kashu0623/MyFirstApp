@@ -15,7 +15,15 @@ buildscript {
         mavenCentral()
     }
     dependencies {
-        classpath("com.android.tools.build:gradle:7.4.2")
+        //classpath("com.android.tools.build:gradle:7.4.2")
+        classpath("com.android.tools.build:gradle:7.3.1")
         //classpath("com.facebook.react:react-native-gradle-plugin")
+    }
+}
+allprojects {
+    repositories {
+        google()       // Android 라이브러리용
+        mavenCentral() // 일반 Java/Kotlin 라이브러리용
+        maven { url 'https://www.jitpack.io' } // 필요한 경우
     }
 }

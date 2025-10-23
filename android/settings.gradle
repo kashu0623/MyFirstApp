@@ -1,3 +1,10 @@
+pluginManagement { // <-- 이 블록 추가
+    repositories {
+        google()
+        mavenCentral()
+        gradlePluginPortal() // Gradle 플러그인 포털 추가
+    }
+} // <-- 여기까지 추가
 rootProject.name = 'MyFirstApp'
 apply from: file("../node_modules/@react-native-community/cli-platform-android/native_modules.gradle"); applyNativeModulesSettingsGradle(settings)
 include ':app'
